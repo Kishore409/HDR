@@ -87,6 +87,13 @@ bool GbmBufferHandler::CreateBuffer(uint32_t w, uint32_t h, int format,
                                     int64_t preferred_modifier,
                                     bool raw_pixel_buffer) const {
   uint32_t gbm_format = format;
+
+  if (format == DRM_FORMAT_P010) {
+	  gbm_format = GBM_FORMAT_GR1616;
+	  w = w / 2;
+	  h = h * 3 / 2;
+  }
+
   if (gbm_format == 0)
     gbm_format = GBM_FORMAT_XRGB8888;
 

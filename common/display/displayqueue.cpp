@@ -737,7 +737,8 @@ bool DisplayQueue::QueueUpdate(std::vector<HwcLayer*>& source_layers,
 
   bool composition_passed = true;
 
-  bool disable_overlays = state_ & kDisableOverlay;
+  //bool disable_overlays = state_ & kDisableOverlay;
+  bool disable_overlays = true;
   bool disable_explictsync = state_ & kDisableExplictSync;
 
   if (!validate_layers && tracker.RevalidateLayers()) {

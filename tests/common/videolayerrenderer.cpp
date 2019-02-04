@@ -140,7 +140,6 @@ static uint32_t get_linewidth_from_format(uint32_t format, uint32_t width,
   if (plane != 0) {
     switch (format) {
       case DRM_FORMAT_NV12:
-      case DRM_FORMAT_P010:
       case DRM_FORMAT_NV21:
       case DRM_FORMAT_NV16:
       case DRM_FORMAT_NV12_Y_TILED_INTEL:
@@ -239,6 +238,7 @@ void VideoLayerRenderer::Draw(int64_t* pfence) {
   }
 
   char* pReadLoc = NULL;
+  fseek(resource_fd_, 0, SEEK_SET);
   for (int i = 0; i < planes_; i++) {
     pReadLoc = (char*)pBo + handle_->meta_data_.offsets_[i];
 
@@ -249,7 +249,6 @@ void VideoLayerRenderer::Draw(int64_t* pfence) {
     while (readHeight < planeHeight) {
       uint32_t lineReadCount = fread(pReadLoc, 1, lineBytes, resource_fd_);
       if (lineReadCount <= 0) {
-        fseek(resource_fd_, 0, SEEK_SET);
         i = -1;
         break;
       } else if (lineReadCount != lineBytes) {

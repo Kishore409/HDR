@@ -603,6 +603,8 @@ static uint32_t layerformat2gbmformat(LAYER_FORMAT format,
       *usage_format = LAYER_HAL_PIXEL_FORMAT_NV12_Y_TILED_INTEL;
       *usage = hwcomposer::kLayerVideo;
       return DRM_FORMAT_NV12_Y_TILED_INTEL;
+    case LAYER_FORMAT_P010:
+      return DRM_FORMAT_P010;
     case LAYER_FORMAT_UNDEFINED:
       return (uint32_t)-1;
   }
@@ -684,6 +686,9 @@ static void init_frames(int32_t width, int32_t height) {
         case LAYER_TYPE_GL:
           renderer = new GLCubeLayerRenderer(buffer_handler, false);
           break;
+      case LAYER_TYPE_VIDEO:
+	      renderer = new VideoLayerRenderer(buffer_handler);
+	      break;
 #ifdef USE_MINIGBM
         case LAYER_TYPE_VIDEO:
           renderer = new VideoLayerRenderer(buffer_handler);
