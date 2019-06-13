@@ -17,7 +17,8 @@ if ENABLE_DUMMY_COMPOSITOR
     AM_CPPFLAGS = -DUSE_DC
 else
 bin_PROGRAMS = testlayers \
-	       linux_test
+	       linux_test \
+		p010_test
 
 testlayers_LDFLAGS = \
 	-no-undefined
@@ -62,9 +63,28 @@ linux_test_LDADD = \
 	$(top_builddir)/tests/third_party/json-c/libjson-c.la \
 	$(top_builddir)/libhwcomposer.la
 
+p010_test_LDADD = \
+	$(DRM_LIBS) \
+	$(DRM_INTEL_LIBS) \
+	$(GBM_LIBS) \
+	$(EGL_LIBS) \
+	$(GLES2_LIBS) \
+	-ldl	\
+	$(top_builddir)/tests/third_party/json-c/libjson-c.la \
+	$(top_builddir)/libhwcomposer.la
+
 linux_test_CFLAGS = \
 	-O0 -g -lm \
 	$(DRM_CFLAGS) \
+	$(GBM_CFLAGS) \
+	$(EGL_CFLAGS) \
+	$(GLES2_CFLAGS) \
+        $(AM_CPPFLAGS)
+
+p010_test_CFLAGS = \
+	-O0 -g -lm \
+	$(DRM_CFLAGS) \
+	$(DRM_INTEL_CFLAGS) \
 	$(GBM_CFLAGS) \
 	$(EGL_CFLAGS) \
 	$(GLES2_CFLAGS) \
@@ -77,4 +97,12 @@ linux_test_SOURCES = \
     ./common/esTransform.cpp \
     ./common/jsonhandlers.cpp \
     ./apps/linux_frontend_test.cpp
+
+p010_test_SOURCES = \
+    ./common/layerrenderer.cpp \
+    ./common/gllayerrenderer.cpp \
+    ./common/glcubelayerrenderer.cpp \
+    ./common/esTransform.cpp \
+    ./common/jsonhandlers.cpp \
+    ./apps/linux_p010_test.cpp
 endif
