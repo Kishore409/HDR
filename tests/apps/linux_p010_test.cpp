@@ -66,6 +66,10 @@
 #include <nativebufferhandler.h>
 #include "platformcommondefines.h"
 
+#ifndef DRM_FORMAT_P010
+#define DRM_FORMAT_P010         fourcc_code('P', '0', '1', '0') /* 2x2 subsampled Cb:Cr plane 10 bits per channel */
+#endif
+
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 
@@ -102,6 +106,7 @@ struct iahwc_backend {
   IAHWC_PFN_LAYER_SET_DISPLAY_FRAME iahwc_layer_set_display_frame;
   IAHWC_PFN_LAYER_SET_SURFACE_DAMAGE iahwc_layer_set_surface_damage;
   IAHWC_PFN_VSYNC iahwc_vsync;
+  IAHWC_PFN_LAYER_SET_RAW_PIXEL_DATA iahwc_layer_set_raw_pixel_data;
 
 } * backend;
 
@@ -378,86 +383,6 @@ static void fill_hwclayer(iahwc_layer_t layer_handle_,
        pParameter->frame_height});
 }
 
-static void init_frames(int32_t width, int32_t height) {
-  size_t LAYER_PARAM_SIZE;
-  if (display_mode) {
-    layer_parameter.type = static_cast<LAYER_TYPE>(0);
-    layer_parameter.format = static_cast<LAYER_FORMAT>(25);
-    layer_parameter.transform = static_cast<LAYER_TRANSFORM>(0);
-    layer_parameter.resource_path = "";
-    layer_parameter.source_width = width;
-    layer_parameter.source_height = height;
-    layer_parameter.source_crop_x = 0;
-    layer_parameter.source_crop_y = 0;
-    layer_parameter.source_crop_width = width;
-    layer_parameter.source_crop_height = height;
-    layer_parameter.frame_x = 0;
-    layer_parameter.frame_y = 0;
-    layer_parameter.frame_width = width;
-    layer_parameter.frame_height = height;
-    LAYER_PARAM_SIZE = 1;
-  }
-  for (size_t j = 0; j < LAYER_PARAM_SIZE; ++j) {
-    if (!display_mode) {
-      layer_parameter = test_parameters.layers_parameters[j];
-      if (layer_parameter.source_width > width)
-        layer_parameter.source_width = width;
-
-      if (layer_parameter.source_height > height)
-        layer_parameter.source_height = height;
-
-      if (layer_parameter.source_crop_width > width)
-        layer_parameter.source_crop_width = width;
-
-      if (layer_parameter.source_crop_height > height)
-        layer_parameter.source_crop_height = height;
-
-      if (layer_parameter.frame_width > width)
-        layer_parameter.frame_width = width;
-
-      if (layer_parameter.frame_height > height)
-        layer_parameter.frame_height = height;
-    }
-
-    LayerRenderer *renderer = NULL;
-    // hwcomposer::HwcLayer *hwc_layer = NULL;
-    iahwc_layer_t layer_handle_;
-    backend->iahwc_create_layer(backend->iahwc_device, 0, &layer_handle_);
-    uint32_t usage_format, usage;
-    uint64_t modificators[4];
-    uint32_t gbm_format =
-        layerformat2gbmformat(layer_parameter.format, &usage_format, &usage);
-
-    switch (layer_parameter.type) {
-      case LAYER_TYPE_GL:
-        renderer = new GLCubeLayerRenderer(buffer_handler, true);
-        break;
-      default:
-        printf("un-recognized layer type!\n");
-        exit(-1);
-    }
-
-    if (!renderer->Init(layer_parameter.source_width,
-                        layer_parameter.source_height, gbm_format, usage_format,
-                        usage, &gl, layer_parameter.resource_path.c_str())) {
-      printf("\nrender init not successful\n");
-      exit(-1);
-    }
-
-    fill_hwclayer(layer_handle_, &layer_parameter, renderer);
-    for (size_t i = 0; i < ARRAY_SIZE(frames); ++i) {
-      struct frame *frame = &frames[i];
-      frame->layers_fences.resize(LAYER_PARAM_SIZE);
-      frame->layers.push_back(layer_handle_);
-      frame->layer_renderers.push_back(
-          std::unique_ptr<LayerRenderer>(renderer));
-      gbm_handle *buffer_handle_ = renderer->GetNativeBoHandle();
-      frame->layer_bos.push_back(buffer_handle_->bo);
-    }
-  }
-}
-
-
 int main(int argc, char *argv[])
 {
 	int ret, fd, primary_width, primary_height;
@@ -485,7 +410,7 @@ int main(int argc, char *argv[])
                 exit(EXIT_FAILURE);
         }
 	fstat(fd, &st);
-	fptr = (uint8_t *) mmap(nullptr, st.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	fptr = (uint8_t *) mmap(nullptr, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (fptr == MAP_FAILED)
 	{
 		close(fd);
@@ -503,7 +428,9 @@ int main(int argc, char *argv[])
 		abort();
 	}
 
+	printf("Unable0 : %s\n", dlerror());
 	iahwc_module = (iahwc_module_t *)dlsym(iahwc_dl_handle, IAHWC_MODULE_STR);
+	printf("Unable1 : %s\n", dlerror());
 	iahwc_module->open(iahwc_module, &iahwc_device);
 
 	backend->iahwc_module = iahwc_module;
@@ -557,6 +484,9 @@ int main(int argc, char *argv[])
 	backend->iahwc_register_callback =
 	(IAHWC_PFN_REGISTER_CALLBACK)iahwc_device->getFunctionPtr(
 	  iahwc_device, IAHWC_FUNC_REGISTER_CALLBACK);
+	backend->iahwc_layer_set_raw_pixel_data=
+	(IAHWC_PFN_LAYER_SET_RAW_PIXEL_DATA)iahwc_device->getFunctionPtr(
+	  iahwc_device, IAHWC_FUNC_LAYER_SET_RAW_PIXEL_DATA);
 
 	fd = open("/dev/dri/renderD128", O_RDWR);
 	if (fd == -1) {
@@ -611,7 +541,21 @@ int main(int argc, char *argv[])
 	printf("Width of primary display is %d height of the primary display is %d\n",
 	 primary_width, primary_height);
 
-	init_frames(primary_width, primary_height);
+	iahwc_layer_t layer_handle_;
+	backend->iahwc_create_layer(iahwc_device, 0, &layer_handle_);
+
+
+	struct iahwc_raw_pixel_data dbo;
+	dbo.width = primary_width;
+	dbo.height = primary_height;
+	dbo.format = DRM_FORMAT_P010;
+        dbo.buffer = fptr;
+	dbo.stride = 1920 * 2;
+	dbo.callback_data = NULL;
+
+	int rt = backend->iahwc_layer_set_raw_pixel_data(iahwc_device, 0, layer_handle_, dbo);
+	if (rt == -1 )
+		printf(" Error : iahwc_layer_set_raw_pixel_data\n");
 
 	int64_t gpu_fence_fd = -1; /* out-fence from gpu, in-fence to kms */
 	uint32_t frame_total = 0;
